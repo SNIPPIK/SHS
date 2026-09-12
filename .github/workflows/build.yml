@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           # Общие флаги CLI
-          ARGS="--release --target ${{ matrix.settings.target }} --platform"
+          ARGS="--release --target ${{ matrix.settings.target }}"
           
           if [ "${{ matrix.settings.cross }}" == "true" ]; then
             ARGS="$ARGS --cross-compile"
