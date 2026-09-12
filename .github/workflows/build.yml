@@ -88,7 +88,7 @@ jobs:
             export RUSTFLAGS="-C link-args=-Wl,-undefined,dynamic_lookup"
           fi
           
-          npx napi build $ARGS --cwd ./rs --esm --js index.mjs
+          cargo build $ARGS
 
       - name: Prepare native build folder
         shell: bash
