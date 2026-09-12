@@ -1,0 +1,105 @@
+name: Build Rust Modules
+on:
+  push:
+    branches: [ "main" ]
+    tags-ignore:
+      - '**'
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          # macOS
+          - host: macos-latest
+            target: x86_64-apple-darwin
+          - host: macos-latest
+            target: aarch64-apple-darwin
+
+          # Windows
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+          - host: windows-latest
+            target: aarch64-pc-windows-msvc
+
+          # Linux (glibc)
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - host: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            cross: true
+
+          # Linux (musl - для Alpine Docker)
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            cross: true
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            cross: true
+
+          # Android
+          - host: ubuntu-latest
+            target: aarch64-linux-android
+            cross: true
+          - host: ubuntu-latest
+            target: armv7-linux-androideabi
+            cross: true
+
+    name: build-${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.settings.target }}
+
+      - name: Install Zig
+        if: ${{ matrix.settings.cross }}
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        shell: bash
+        run: |
+          # Общие флаги CLI
+          ARGS="--release --target ${{ matrix.settings.target }} --platform"
+          
+          if [ "${{ matrix.settings.cross }}" == "true" ]; then
+            ARGS="$ARGS --cross-compile"
+          fi
+          
+          # MACOS:
+          if [[ "${{ matrix.settings.target }}" == *"-apple-darwin"* ]]; then
+            export RUSTFLAGS="-C link-args=-Wl,-undefined,dynamic_lookup"
+          fi
+          
+          npx napi build $ARGS --cwd ./rs --esm --js index.mjs
+
+      - name: Prepare native build folder
+        shell: bash
+        run: |
+          mkdir -p build
+          cp target/release/*.exe build 2>/dev/null || true
+          cp target/release/sthp build 2>/dev/null || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: build
+          if-no-files-found: error
