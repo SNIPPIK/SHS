@@ -56,15 +56,6 @@ jobs:
         with:
           targets: ${{ matrix.settings.target }}
 
-      - name: Rust Cache
-        uses: swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.settings.target }}
-
-      - name: Install Zig
-        if: ${{ matrix.settings.cross }}
-        uses: goto-bus-stop/setup-zig@v2
-
       - name: Install cargo-zigbuild
         if: ${{ matrix.settings.cross }}
         run: cargo install cargo-zigbuild --locked
