@@ -33,30 +33,24 @@ jobs:
           - host: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             cross: true
+          - host: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            cross: true
 
-          # Linux (musl - для Alpine Docker)
+          # Linux (musl)
           - host: ubuntu-latest
             target: x86_64-unknown-linux-musl
             cross: true
           - host: ubuntu-latest
             target: aarch64-unknown-linux-musl
             cross: true
-          - host: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
-            cross: true
-
-          # Android
-          - host: ubuntu-latest
-            target: aarch64-linux-android
-            cross: true
-          - host: ubuntu-latest
-            target: armv7-linux-androideabi
-            cross: true
 
     name: build-${{ matrix.settings.target }}
     runs-on: ${{ matrix.settings.host }}
 
     steps:
+      - uses: actions/checkout@v7
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -71,24 +65,30 @@ jobs:
         if: ${{ matrix.settings.cross }}
         uses: goto-bus-stop/setup-zig@v2
 
+      - name: Install cargo-zigbuild
+        if: ${{ matrix.settings.cross }}
+        run: cargo install cargo-zigbuild --locked
+
       - name: Build
         shell: bash
         run: |
-          # Общие флаги CLI
-          ARGS="--release --target ${{ matrix.settings.target }}"
-          
-          if [ "${{ matrix.settings.cross }}" == "true" ]; then
-            ARGS="$ARGS --cross-compile"
-          fi
-          
-          # MACOS:
-          if [[ "${{ matrix.settings.target }}" == *"-apple-darwin"* ]]; then
+          set -euo pipefail
+
+          TARGET="${{ matrix.settings.target }}"
+
+          # macOS: разрешаем неразрешённые символы при линковке
+          if [[ "$TARGET" == *"-apple-darwin"* ]]; then
             export RUSTFLAGS="-C link-args=-Wl,-undefined,dynamic_lookup"
           fi
-          
-          cargo build $ARGS
 
-      - name: Prepare native build folder
+          if [ "${{ matrix.settings.cross }}" == "true" ]; then
+            # zigbuild сам подхватывает Zig как линкер и умеет --platform для musl
+            cargo zigbuild --release --target "$TARGET"
+          else
+            cargo build --release --target "$TARGET"
+          fi
+
+      - name: Prepare artifact folder
         shell: bash
         run: |
           set -euo pipefail
@@ -110,7 +110,7 @@ jobs:
           ls -la build
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
           path: build/
